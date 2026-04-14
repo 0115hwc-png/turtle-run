@@ -202,7 +202,16 @@
     .mfill { height: 100%; background: var(--sage); border-radius: 10px; transition: width 0.4s; }
     .kmeta { display: flex; justify-content: space-between; align-items: center; }
     .kpct { font-size: 14px; color: var(--sage-dark); font-weight: 600; }
-
+/* 📱 모바일에서 1열로 세로 정렬 (효율 극대화) */
+@media (max-width: 768px) {
+  .kanban { 
+    grid-template-columns: 1fr; /* 3열에서 1열로 변경 */
+    gap: 16px; 
+  }
+  .kcol {
+    padding: 20px; /* 모바일 전용 여백 조절 */
+  }
+}
     /* 진도 기록 List */
     .log-item { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--sage-light); }
     .log-item:last-child { border-bottom: none; padding-bottom: 0; }
