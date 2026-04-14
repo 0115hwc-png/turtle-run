@@ -5,12 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🐢 Turtle Run — Golden Star</title>
 
-  <!-- ========================================================
-    GA4 추적 코드
-    👉 아래 두 곳의 'G-XXXXXXXXXX'를 본인의 GA4 측정 ID로 교체하세요.
-    예시: G-AB12CD34EF
-    GA4 측정 ID는 Google Analytics > 관리 > 데이터 스트림에서 확인할 수 있습니다.
-  ======================================================== -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-JKTD8T6G79"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -18,39 +12,16 @@
     gtag('js', new Date());
     gtag('config', 'G-JKTD8T6G79');
 
-    /* ── GA4 커스텀 이벤트 헬퍼 함수 ──────────────────────────
-       GA4 콘솔 > 보고서 > 이벤트에서 아래 이벤트명으로 확인 가능:
-       · star_earned            : 하루 목표 달성으로 ⭐ 획득 시
-       · golden_turtle_awakened : 교재 100% 완독 달성 시
-       · log_added              : 학습 기록 저장 시
-    ──────────────────────────────────────────────────────── */
     function ga_starEarned(bookTitle, subject, totalStars) {
-      gtag('event', 'star_earned', {
-        event_category: 'progress',
-        book_title: bookTitle,
-        subject: subject,
-        total_stars: totalStars
-      });
+      gtag('event', 'star_earned', { event_category: 'progress', book_title: bookTitle, subject: subject, total_stars: totalStars });
     }
     function ga_goldenAwakened(bookTitle, subject, totalStars) {
-      gtag('event', 'golden_turtle_awakened', {
-        event_category: 'completion',
-        book_title: bookTitle,
-        subject: subject,
-        total_stars: totalStars
-      });
+      gtag('event', 'golden_turtle_awakened', { event_category: 'completion', book_title: bookTitle, subject: subject, total_stars: totalStars });
     }
     function ga_logAdded(bookTitle, amount, unit, newPct) {
-      gtag('event', 'log_added', {
-        event_category: 'engagement',
-        book_title: bookTitle,
-        amount: amount,
-        unit: unit,
-        progress_pct: newPct
-      });
+      gtag('event', 'log_added', { event_category: 'engagement', book_title: bookTitle, amount: amount, unit: unit, progress_pct: newPct });
     }
   </script>
-  <!-- ======================================================== -->
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -75,9 +46,42 @@
 
     html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
 
-    .app { display: flex; height: 100vh; min-height: 600px; }
+    .app { display: flex; height: 100vh; min-height: 600px; position: relative; }
 
-    .sidebar { width: 200px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 16px 0; }
+    /* [사이드바 모바일 최적화 수정] */
+    .sidebar { 
+      width: 200px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); 
+      display: flex; flex-direction: column; padding: 16px 0; z-index: 1000;
+      transition: transform 0.3s ease;
+    }
+    
+    @media (max-width: 600px) {
+      .sidebar {
+        position: fixed;
+        height: 100%;
+        transform: translateX(-100%); /* 평소에는 숨김 */
+      }
+      .sidebar.mobile-open {
+        transform: translateX(0); /* 클릭 시 등장 */
+        box-shadow: 10px 0 30px rgba(0,0,0,0.15);
+      }
+      .menu-btn { display: flex !important; } /* 모바일에서만 햄버거 버튼 노출 */
+      .overlay { display: block !important; }
+    }
+
+    /* 햄버거 버튼 스타일 */
+    .menu-btn {
+      display: none; position: fixed; top: 15px; left: 15px; width: 40px; height: 40px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      align-items: center; justify-content: center; font-size: 20px; cursor: pointer; z-index: 900;
+    }
+
+    /* 사이드바 열렸을 때 배경 어둡게 */
+    .sidebar-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 950;
+    }
+    .sidebar-overlay.active { display: block; }
+
     .logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 16px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
     .logo-bubble { width: 36px; height: 36px; background: var(--g); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
     .logo-text { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.2; }
@@ -89,19 +93,19 @@
     .sidebar-footer { padding: 12px 16px; font-size: 10px; color: var(--text3); margin-top: auto; line-height: 1.7; }
 
     .main { flex: 1; overflow-y: auto; padding: 20px; min-width: 0; background: var(--bg); }
+    @media (max-width: 600px) { .main { padding-top: 70px; } }
+
+    /* 이하 모든 기존 스타일 (400줄 분량의 디테일) 그대로 유지 */
     .page { display: none; }
     .page.active { display: block; }
-
     .sg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
     .sc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; }
     .sl { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
     .sv { font-size: 22px; font-weight: 700; color: var(--text); }
     .ss { font-size: 10px; color: var(--text2); margin-top: 2px; }
-
     .sec { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 14px; }
     .sh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
     .st { font-size: 14px; font-weight: 600; color: var(--text); }
-
     .btn { padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; font-size: 12px; background: var(--surface); color: var(--text); transition: all 0.12s; font-family: inherit; }
     .btn:hover { background: var(--bg); }
     .btn-g { background: var(--g); color: #fff; border-color: var(--g); }
@@ -137,7 +141,7 @@
     .input-feedback { font-size: 11px; color: var(--g); margin-top: 5px; min-height: 15px; font-weight: 500; }
     .input-feedback.warn { color: #b8860b; }
 
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 200; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 2000; }
     .modal { background: var(--surface); border-radius: var(--radius-lg); padding: 20px; width: 320px; max-height: 90vh; overflow-y: auto; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
     .modal-title { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--text); }
 
@@ -167,7 +171,8 @@
 
     .empty { text-align: center; padding: 32px; color: var(--text2); font-size: 13px; line-height: 1.8; }
 
-    .golden-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 300; }
+    /* 황금 거북이 축하쇼 스타일 */
+    .golden-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3000; }
     .golden-bg { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
     .spark-canvas { position: absolute; inset: 0; pointer-events: none; z-index: 1; width: 100%; height: 100%; }
     .golden-card { position: relative; background: var(--surface); border-radius: 20px; padding: 32px 40px; text-align: center; border: 2px solid var(--gold); min-width: 280px; z-index: 2; box-shadow: 0 0 60px rgba(245,200,66,0.25); }
@@ -185,8 +190,11 @@
 </head>
 <body>
 
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+<button class="menu-btn" onclick="toggleSidebar()">☰</button>
+
 <div class="app" id="app">
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
     <div class="logo">
       <div class="logo-bubble">🐢</div>
       <div>
@@ -194,10 +202,10 @@
         <div class="logo-sub">⭐ Golden Star</div>
       </div>
     </div>
-    <div class="nav-item active" onclick="nav('home')" id="nav-home"><span class="nav-icon">🏠</span>홈</div>
-    <div class="nav-item" onclick="nav('progress')" id="nav-progress"><span class="nav-icon">📊</span>진도 기록</div>
-    <div class="nav-item" onclick="nav('kanban')" id="nav-kanban"><span class="nav-icon">🐢</span>회독 보드</div>
-    <div class="nav-item" onclick="nav('settings')" id="nav-settings"><span class="nav-icon">⚙️</span>교재 설정</div>
+    <div class="nav-item active" onclick="nav('home'); toggleSidebar()" id="nav-home"><span class="nav-icon">🏠</span>홈</div>
+    <div class="nav-item" onclick="nav('progress'); toggleSidebar()" id="nav-progress"><span class="nav-icon">📊</span>진도 기록</div>
+    <div class="nav-item" onclick="nav('kanban'); toggleSidebar()" id="nav-kanban"><span class="nav-icon">🐢</span>회독 보드</div>
+    <div class="nav-item" onclick="nav('settings'); toggleSidebar()" id="nav-settings"><span class="nav-icon">⚙️</span>교재 설정</div>
     <div class="sidebar-footer">자동저장 · LocalStorage<br>v2.0 Golden Star</div>
   </div>
 
@@ -244,6 +252,7 @@
 <div id="modal-area"></div>
 
 <script>
+/* [기능 로직 - 100% 원본 유지] */
 let S = { books: [], logs: [], examDate: null };
 
 function load() {
@@ -254,6 +263,13 @@ function save() { localStorage.setItem('turtlerun_gs', JSON.stringify(S)); }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function pct(b) { return b.total > 0 ? Math.min(100, Math.round(b.current / b.total * 100)) : 0; }
 
+// 사이드바 토글 함수 (모바일 전용)
+function toggleSidebar() {
+  if (window.innerWidth > 600) return;
+  document.getElementById('sidebar').classList.toggle('mobile-open');
+  document.getElementById('sidebar-overlay').classList.toggle('active');
+}
+
 function getStarsFor(bookId) {
   const byDay = {};
   S.logs.filter(l => l.bookId === bookId).forEach(l => { const d = l.date.slice(0,10); byDay[d] = (byDay[d]||0) + l.amount; });
@@ -262,6 +278,7 @@ function getStarsFor(bookId) {
   Object.entries(byDay).forEach(([d, amt]) => { stars[d] = b.dailyGoal > 0 && amt >= b.dailyGoal; });
   return stars;
 }
+
 function getLast7Stars(bookId) {
   const stars = getStarsFor(bookId); const days = [];
   for (let i = 6; i >= 0; i--) {
@@ -272,6 +289,7 @@ function getLast7Stars(bookId) {
   }
   return days;
 }
+
 function countAllStars() {
   let t = 0;
   S.books.forEach(b => { Object.values(getStarsFor(b.id)).forEach(v => { if (v) t++; }); });
@@ -285,6 +303,7 @@ function nav(page) {
   document.getElementById('nav-' + page).classList.add('active');
   render();
 }
+
 function saveExamDate() { S.examDate = document.getElementById('exam-date-input').value; save(); renderHome(); }
 function getDday() { if (!S.examDate) return null; return Math.ceil((new Date(S.examDate) - new Date()) / 86400000); }
 
@@ -355,6 +374,7 @@ function advancePhase(id) {
   if (b.phase < 2) { b.phase++; b.current = 0; save(); render(); }
   else { b.mastered = true; save(); triggerGolden(b); }
 }
+
 function deleteBook(id) {
   if (!confirm('교재를 삭제할까요? 기록도 함께 삭제됩니다.')) return;
   S.books = S.books.filter(b => b.id !== id);
@@ -372,6 +392,7 @@ function openBookModal() {
     <div class="fg"><label class="fl">하루 권장 목표량 <span style="color:var(--text3)">(0 = 미설정)</span></label><input class="fi" id="m-goal" type="number" min="0" placeholder="예: 30"></div>
     <div class="mf"><button class="btn" onclick="closeModal()">취소</button><button class="btn btn-g" onclick="addBook()">등록하기</button></div>`);
 }
+
 function addBook() {
   const subject=document.getElementById('m-sub').value.trim(),title=document.getElementById('m-title').value.trim(),unit=document.getElementById('m-unit').value,total=parseInt(document.getElementById('m-total').value)||0,dailyGoal=parseInt(document.getElementById('m-goal').value)||0;
   if(!subject||!title||total<1){alert('과목명, 교재명, 전체 분량을 입력해주세요');return;}
@@ -389,12 +410,14 @@ function openLogModal() {
     <div class="mf"><button class="btn" onclick="closeModal()">취소</button><button class="btn btn-g" onclick="addLog()">저장 ⭐</button></div>`);
   updateLogInfo();
 }
+
 function updateLogInfo() {
   const b=S.books.find(b=>b.id===document.getElementById('m-book').value);if(!b)return;
   document.getElementById('m-amt-label').textContent=`오늘 완료한 분량 (${b.unit})`;
   document.getElementById('log-info').textContent=`현재 ${b.current}${b.unit} · 남은 ${Math.max(0,b.total-b.current)}${b.unit}${b.dailyGoal?` · 오늘 목표 ${b.dailyGoal}${b.unit}`:''}`;
   updateLogPreview();
 }
+
 function updateLogPreview() {
   const b=S.books.find(b=>b.id===document.getElementById('m-book').value);
   const amt=parseInt(document.getElementById('m-amt').value)||0;const fb=document.getElementById('log-fb');
@@ -404,6 +427,7 @@ function updateLogPreview() {
   else if(b.dailyGoal>0){fb.className='input-feedback warn';fb.textContent=`☆ 목표까지 ${b.dailyGoal-amt}${b.unit} 더 필요 · ${np}% 예정`;}
   else{fb.className='input-feedback';fb.textContent=`+${amt}${b.unit} → ${np}% 예정`;}
 }
+
 function addLog() {
   const b=S.books.find(b=>b.id===document.getElementById('m-book').value);
   const amt=parseInt(document.getElementById('m-amt').value)||0;
@@ -435,6 +459,7 @@ function showModal(html) {
   bd.addEventListener('click',e=>{if(e.target===bd)closeModal();});
   area.appendChild(bd);
 }
+
 function closeModal(){document.getElementById('modal-area').innerHTML='';}
 
 function triggerGolden(book) {
