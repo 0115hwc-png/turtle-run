@@ -102,6 +102,12 @@
     .sc:nth-child(1) { background: var(--surface); }
     .sc:nth-child(2) { background: var(--sky); box-shadow: none; }
     .sc:nth-child(3) { background: var(--butter); box-shadow: none; }
+
+    /* 📱 모바일 상단 요약 카드 2+1 배치 추가 */
+    @media (max-width: 768px) {
+      .sg { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+      .sc:nth-child(1) { grid-column: span 2; padding: 24px; }
+    }
  
     .sl { font-size: 13px; color: var(--text2); font-weight: 500; margin-bottom: 8px; }
     .sv { font-size: 32px; font-weight: 700; color: var(--text); letter-spacing: -0.04em; line-height: 1; }
