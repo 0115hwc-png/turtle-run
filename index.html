@@ -368,21 +368,21 @@
   <div class="main">
     <div class="page active" id="page-home">
       <div class="sg">
-        <div class="sc"><div class="sl" id="dday-label">D-Day</div><div class="sv" id="dday-val">-</div><div class="ss" id="dday-date">시험일 미설정</div></div>
+        <div class="sc"><div class="sl" id="dday-label">시험 D-Day</div><div class="sv" id="dday-val">-</div><div class="ss" id="dday-date">시험일 미설정</div></div>
         <div class="sc"><div class="sl">전체 달성률</div><div class="sv" id="avg-pct">0%</div><div class="ss" id="book-count">교재 0권</div></div>
         <div class="sc"><div class="sl">누적 보상</div><div class="sv" id="total-stars">0</div><div class="ss">오늘 포함 전체 ⭐</div></div>
       </div>
       <div class="subcopy">오늘 할 일보다, 지금 내가 어디쯤 왔는지를 보여주는 학습 대시보드</div>
+      <div class="sec">
+        <div class="sh"><span class="st">오늘의 진도 트랙</span><button class="btn btn-g" onclick="openLogModal()">+ 오늘 기록</button></div>
+        <div id="race-track"></div>
+      </div>
       <div class="sec">
         <div class="sh"><span class="st">학습 인사이트</span></div>
         <div class="insight-grid">
           <div class="insight-card" id="current-position-card"></div>
           <div class="insight-card" id="study-pattern-card"></div>
         </div>
-      </div>
-      <div class="sec">
-        <div class="sh"><span class="st">오늘의 진도 트랙</span><button class="btn btn-g" onclick="openLogModal()">+ 오늘 기록</button></div>
-        <div id="race-track"></div>
       </div>
     </div>
  
@@ -471,33 +471,15 @@ function getEstimatedCompletion(book) {
   date.setDate(date.getDate() + estimatedDays);
   return { date, dailyPace, remainingProgress };
 }
-function getCurrentBook() {
-  if (!S.books.length) return null;
-  const latestLog = [...S.logs].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-  if (latestLog) return S.books.find(b => b.id === latestLog.bookId) || S.books[0];
-  return [...S.books].sort((a, b) => pct(b) - pct(a))[0];
-}
-function getNextTargetBook() {
-  const booksWithTarget = S.books.filter(b => b.targetDate && b.phase === 0);
-  if (!booksWithTarget.length) return null;
-  const today = startOfDay(new Date());
-  const upcoming = booksWithTarget
-    .filter(b => startOfDay(b.targetDate) >= today)
-    .sort((a, b) => startOfDay(a.targetDate) - startOfDay(b.targetDate));
-  if (upcoming.length) return upcoming[0];
-  return [...booksWithTarget].sort((a, b) => startOfDay(a.targetDate) - startOfDay(b.targetDate))[0];
-}
 function getRecentPattern() {
   if (!S.logs.length) return null;
-  const today = new Date();
   const cutoff = new Date();
-  cutoff.setDate(today.getDate() - 6);
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - 6);
   const recentLogs = S.logs.filter(l => new Date(l.date) >= cutoff);
-  const firstLog = [...S.logs].sort((a, b) => new Date(a.date) - new Date(b.date))[0];
-  const trackedDays = Math.floor((today - new Date(firstLog.date)) / 86400000) + 1;
-  if (trackedDays < 7 || !recentLogs.length) return null;
   const recentDailyTotals = getDailyLogTotals(recentLogs);
   const studyDays = Object.keys(recentDailyTotals).length;
+  if (studyDays < 3) return null;
   const avgIncrease = recentLogs.reduce((sum, log) => {
     const book = S.books.find(b => b.id === log.bookId);
     if (!book || !book.total) return sum;
@@ -561,30 +543,24 @@ function getDday() { if (!S.examDate) return null; return Math.ceil((new Date(S.
  
 function renderHome() {
   const dd = getDday();
-  const nextTargetBook = getNextTargetBook();
   const dv = document.getElementById('dday-val'), dd2 = document.getElementById('dday-date');
   const dl = document.getElementById('dday-label');
   const currentCard = document.getElementById('current-position-card');
   const patternCard = document.getElementById('study-pattern-card');
-  if (nextTargetBook) {
-    const days = diffDays(nextTargetBook.targetDate, new Date());
-    dl.textContent = '다음 1회독 목표';
-    dv.textContent = `${nextTargetBook.title} ${days > 0 ? `D-${days}` : days === 0 ? 'D-Day' : `D+${Math.abs(days)}`}`;
-    dd2.textContent = formatDotDate(nextTargetBook.targetDate);
-  } else if (dd === null) {
-    dl.textContent = 'D-Day';
+  if (dd === null) {
+    dl.textContent = '시험 D-Day';
     dv.textContent = '-';
     dd2.textContent = '설정하기';
   } else if (dd > 0) {
-    dl.textContent = 'D-Day';
+    dl.textContent = '시험 D-Day';
     dv.textContent = 'D-' + dd;
     dd2.textContent = S.examDate;
   } else if (dd === 0) {
-    dl.textContent = 'D-Day';
+    dl.textContent = '시험 D-Day';
     dv.textContent = 'D-Day';
     dd2.textContent = '오늘이 시험일입니다';
   } else {
-    dl.textContent = 'D-Day';
+    dl.textContent = '시험 D-Day';
     dv.textContent = 'D+' + Math.abs(dd);
     dd2.textContent = S.examDate;
   }
@@ -595,7 +571,7 @@ function renderHome() {
   const track = document.getElementById('race-track');
   if (!S.books.length) {
     currentCard.innerHTML = '<div class="insight-label">현재 학습 위치</div><div class="insight-note">첫 교재를 등록하면 현재 학습 위치와 예상 완주 시점을 볼 수 있어요.</div>';
-    patternCard.innerHTML = '<div class="insight-label">최근 7일 학습 패턴</div><div class="insight-note">7일 이상 기록하면 학습 패턴을 분석해드릴게요.</div>';
+    patternCard.innerHTML = '<div class="insight-label">최근 7일 학습 패턴</div><div class="insight-note">기록이 3일 이상 쌓이면 최근 7일 학습 패턴을 보여드릴게요.</div>';
     track.innerHTML = '<div class="empty"><div class="empty-turtle">🐢</div><div class="empty-quote">Turtle says:</div>첫 교재를 등록하면 현재 학습 위치와 예상 완주 시점을 볼 수 있어요.<br><button class="btn btn-g" onclick="openBookModal()" style="margin-top:20px">+ 첫 교재 등록</button></div>';
     return;
   }
@@ -630,7 +606,7 @@ function renderHome() {
     <div class="insight-row"><span class="insight-key">학습한 날</span><span class="insight-value">${pattern.studyDays}일</span></div>
     <div class="insight-row"><span class="insight-key">하루 평균 진도 증가</span><span class="insight-value">${pattern.avgIncrease}%p</span></div>
     <div class="insight-row"><span class="insight-key">가장 많이 본 교재</span><span class="insight-value">${esc(pattern.mostStudied)}</span></div>
-  ` : '<div class="insight-label">최근 7일 학습 패턴</div><div class="insight-note">7일 이상 기록하면 학습 패턴을 분석해드릴게요.</div>';
+  ` : '<div class="insight-label">최근 7일 학습 패턴</div><div class="insight-note">기록이 3일 이상 쌓이면 최근 7일 학습 패턴을 보여드릴게요.</div>';
   track.innerHTML = S.books.map(b => {
     const p = pct(b), lp = Math.max(2, Math.min(98, p));
     const days = getLast7Stars(b.id);
