@@ -167,6 +167,23 @@
       font-size: 14px;
       line-height: 1.7;
     }
+    .insight-group {
+      padding-bottom: 18px;
+      margin-bottom: 18px;
+      border-bottom: 1px solid var(--sage-light);
+    }
+    .insight-group:last-child {
+      padding-bottom: 0;
+      margin-bottom: 0;
+      border-bottom: none;
+    }
+    .insight-status {
+      margin-top: 12px;
+      color: var(--sage-dark);
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.6;
+    }
     .empty-turtle {
       font-size: 30px;
       margin-bottom: 10px;
@@ -175,6 +192,11 @@
       font-weight: 600;
       color: var(--text);
       margin-bottom: 8px;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-left: 12px;
     }
 
     @media (max-width: 768px) {
@@ -346,7 +368,7 @@
   <div class="main">
     <div class="page active" id="page-home">
       <div class="sg">
-        <div class="sc"><div class="sl">D-Day</div><div class="sv" id="dday-val">-</div><div class="ss" id="dday-date">시험일 미설정</div></div>
+        <div class="sc"><div class="sl" id="dday-label">D-Day</div><div class="sv" id="dday-val">-</div><div class="ss" id="dday-date">시험일 미설정</div></div>
         <div class="sc"><div class="sl">전체 달성률</div><div class="sv" id="avg-pct">0%</div><div class="ss" id="book-count">교재 0권</div></div>
         <div class="sc"><div class="sl">누적 보상</div><div class="sv" id="total-stars">0</div><div class="ss">오늘 포함 전체 ⭐</div></div>
       </div>
@@ -403,8 +425,22 @@ function load() {
 function save() { localStorage.setItem('turtlerun_gs', JSON.stringify(S)); }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function pct(b) { return b.total > 0 ? Math.min(100, Math.round(b.current / b.total * 100)) : 0; }
+function formatDotDate(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+}
 function formatDate(value) {
   return new Date(value).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+function startOfDay(value) {
+  const d = new Date(value);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function diffDays(a, b) {
+  return Math.round((startOfDay(a) - startOfDay(b)) / 86400000);
 }
 function getBookLogs(bookId) {
   return S.logs
@@ -420,22 +456,36 @@ function getDailyLogTotals(logs) {
 }
 function getEstimatedCompletion(book) {
   const logs = getBookLogs(book.id);
-  const dailyTotals = getDailyLogTotals(logs);
-  const days = Object.keys(dailyTotals).sort();
-  if (days.length < 2) return null;
-  const avgPerStudyDay = Object.values(dailyTotals).reduce((sum, amount) => sum + amount, 0) / days.length;
-  if (avgPerStudyDay <= 0) return null;
-  const remaining = Math.max(0, book.total - book.current);
-  const estimatedDays = Math.ceil(remaining / avgPerStudyDay);
+  if (logs.length < 3) return null;
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - 13);
+  const recentLogs = logs.filter(l => new Date(l.date) >= cutoff);
+  if (recentLogs.length < 3) return null;
+  const recentProgressIncrease = recentLogs.reduce((sum, log) => sum + (log.amount / book.total * 100), 0);
+  const dailyPace = recentProgressIncrease / 14;
+  if (dailyPace <= 0) return null;
+  const remainingProgress = Math.max(0, 100 - pct(book));
+  const estimatedDays = Math.ceil(remainingProgress / dailyPace);
   const date = new Date();
   date.setDate(date.getDate() + estimatedDays);
-  return formatDate(date);
+  return { date, dailyPace, remainingProgress };
 }
 function getCurrentBook() {
   if (!S.books.length) return null;
   const latestLog = [...S.logs].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
   if (latestLog) return S.books.find(b => b.id === latestLog.bookId) || S.books[0];
   return [...S.books].sort((a, b) => pct(b) - pct(a))[0];
+}
+function getNextTargetBook() {
+  const booksWithTarget = S.books.filter(b => b.targetDate && b.phase === 0);
+  if (!booksWithTarget.length) return null;
+  const today = startOfDay(new Date());
+  const upcoming = booksWithTarget
+    .filter(b => startOfDay(b.targetDate) >= today)
+    .sort((a, b) => startOfDay(a.targetDate) - startOfDay(b.targetDate));
+  if (upcoming.length) return upcoming[0];
+  return [...booksWithTarget].sort((a, b) => startOfDay(a.targetDate) - startOfDay(b.targetDate))[0];
 }
 function getRecentPattern() {
   if (!S.logs.length) return null;
@@ -511,13 +561,33 @@ function getDday() { if (!S.examDate) return null; return Math.ceil((new Date(S.
  
 function renderHome() {
   const dd = getDday();
+  const nextTargetBook = getNextTargetBook();
   const dv = document.getElementById('dday-val'), dd2 = document.getElementById('dday-date');
+  const dl = document.getElementById('dday-label');
   const currentCard = document.getElementById('current-position-card');
   const patternCard = document.getElementById('study-pattern-card');
-  if (dd === null) { dv.textContent = '-'; dd2.textContent = '설정하기'; }
-  else if (dd > 0) { dv.textContent = 'D-' + dd; dd2.textContent = S.examDate; }
-  else if (dd === 0) { dv.textContent = 'D-Day'; dd2.textContent = '오늘이 시험일입니다'; }
-  else { dv.textContent = 'D+' + Math.abs(dd); dd2.textContent = S.examDate; }
+  if (nextTargetBook) {
+    const days = diffDays(nextTargetBook.targetDate, new Date());
+    dl.textContent = '다음 1회독 목표';
+    dv.textContent = `${nextTargetBook.title} ${days > 0 ? `D-${days}` : days === 0 ? 'D-Day' : `D+${Math.abs(days)}`}`;
+    dd2.textContent = formatDotDate(nextTargetBook.targetDate);
+  } else if (dd === null) {
+    dl.textContent = 'D-Day';
+    dv.textContent = '-';
+    dd2.textContent = '설정하기';
+  } else if (dd > 0) {
+    dl.textContent = 'D-Day';
+    dv.textContent = 'D-' + dd;
+    dd2.textContent = S.examDate;
+  } else if (dd === 0) {
+    dl.textContent = 'D-Day';
+    dv.textContent = 'D-Day';
+    dd2.textContent = '오늘이 시험일입니다';
+  } else {
+    dl.textContent = 'D-Day';
+    dv.textContent = 'D+' + Math.abs(dd);
+    dd2.textContent = S.examDate;
+  }
   const avg = S.books.length ? Math.round(S.books.reduce((s,b) => s+pct(b), 0) / S.books.length) : 0;
   document.getElementById('avg-pct').textContent = avg + '%';
   document.getElementById('book-count').textContent = '등록된 교재 ' + S.books.length + '권';
@@ -529,16 +599,31 @@ function renderHome() {
     track.innerHTML = '<div class="empty"><div class="empty-turtle">🐢</div><div class="empty-quote">Turtle says:</div>첫 교재를 등록하면 현재 학습 위치와 예상 완주 시점을 볼 수 있어요.<br><button class="btn btn-g" onclick="openBookModal()" style="margin-top:20px">+ 첫 교재 등록</button></div>';
     return;
   }
-  const currentBook = getCurrentBook();
-  const currentEstimate = currentBook ? getEstimatedCompletion(currentBook) : null;
-  currentCard.innerHTML = currentBook ? `
+  currentCard.innerHTML = `
     <div class="insight-label">현재 학습 위치</div>
-    <div class="insight-book">${esc(currentBook.title)}</div>
-    <div class="insight-row"><span class="insight-key">진행률</span><span class="insight-value">${pct(currentBook)}%</span></div>
-    ${currentEstimate
-      ? `<div class="insight-row"><span class="insight-key">예상 완주</span><span class="insight-value">${currentEstimate}</span></div>`
-      : '<div class="insight-note">기록이 쌓이면 예상 완주 시점을 보여드릴게요.</div>'}
-  ` : '<div class="insight-label">현재 학습 위치</div><div class="insight-note">기록이 쌓이면 예상 완주 시점을 보여드릴게요.</div>';
+    ${S.books.map(book => {
+      const estimate = getEstimatedCompletion(book);
+      const estimatedDate = estimate ? formatDotDate(estimate.date) : null;
+      const paceText = estimate && book.targetDate
+        ? (() => {
+            const gap = diffDays(estimate.date, book.targetDate);
+            if (gap > 0) return `현재 루틴 기준 목표보다 ${gap}일 늦음`;
+            if (gap < 0) return `현재 루틴 기준 목표보다 ${Math.abs(gap)}일 빠름`;
+            return '현재 루틴 기준 목표일에 맞춰가고 있어요.';
+          })()
+        : '';
+      return `
+        <div class="insight-group">
+          <div class="insight-book">${esc(book.title)}</div>
+          <div class="insight-row"><span class="insight-key">진행률</span><span class="insight-value">${pct(book)}%</span></div>
+          ${book.targetDate ? `<div class="insight-row"><span class="insight-key">1회독 목표일</span><span class="insight-value">${formatDotDate(book.targetDate)}</span></div>` : ''}
+          ${estimatedDate
+            ? `<div class="insight-row"><span class="insight-key">예상 완주일</span><span class="insight-value">${estimatedDate}</span></div>${paceText ? `<div class="insight-status">${paceText}</div>` : ''}`
+            : '<div class="insight-note">기록이 더 쌓이면 학습 루틴을 반영해 예상 완주일을 보여드릴게요.</div>'}
+        </div>
+      `;
+    }).join('')}
+  `;
   const pattern = getRecentPattern();
   patternCard.innerHTML = pattern ? `
     <div class="insight-label">최근 7일 학습 패턴</div>
@@ -585,7 +670,7 @@ function renderSettings() {
   const list = document.getElementById('settings-list');
   if (!S.books.length) { list.innerHTML = '<div class="empty">등록된 교재가 없습니다.</div>'; return; }
   list.innerHTML = S.books.map(b =>
-    `<div class="scard"><div style="flex:1;min-width:0"><div class="sn">${b.mastered?'🐢 ':''}${esc(b.title)}</div><div class="sm">${esc(b.subject)} · 총 ${b.total}${b.unit} · 하루 목표 ${b.dailyGoal||0}${b.unit} · 진행률 ${pct(b)}%</div></div><button class="btn btn-xs btn-danger" onclick="deleteBook('${b.id}')">삭제</button></div>`
+    `<div class="scard"><div style="flex:1;min-width:0"><div class="sn">${b.mastered?'🐢 ':''}${esc(b.title)}</div><div class="sm">${esc(b.subject)} · 총 ${b.total}${b.unit} · 하루 목표 ${b.dailyGoal||0}${b.unit} · 진행률 ${pct(b)}%${b.targetDate ? ` · 1회독 목표 ${formatDotDate(b.targetDate)}` : ''}</div></div><div class="actions"><button class="btn btn-xs" onclick="openBookModal('${b.id}')">수정</button><button class="btn btn-xs btn-danger" onclick="deleteBook('${b.id}')">삭제</button></div></div>`
   ).join('');
 }
  
@@ -604,21 +689,32 @@ function deleteBook(id) {
   save(); render();
 }
  
-function openBookModal() {
+function openBookModal(id='') {
+  const book = id ? S.books.find(b => b.id === id) : null;
   const subs = [...new Set(S.books.map(b => b.subject))];
-  showModal(`<div class="modal-title">새 교재 등록</div>
-    <div class="fg"><label class="fl">과목명</label><input class="fi" id="m-sub" placeholder="예: 거시경제학" list="sl" autocomplete="off"><datalist id="sl">${subs.map(s=>`<option value="${esc(s)}">`).join('')}</datalist></div>
-    <div class="fg"><label class="fl">교재명</label><input class="fi" id="m-title" placeholder="교재 이름을 입력하세요"></div>
-    <div class="fr"><div class="fg"><label class="fl">단위</label><select class="fi" id="m-unit"><option value="p">페이지</option><option value="문제">문제</option><option value="강">강의</option></select></div>
-    <div class="fg"><label class="fl">전체 분량</label><input class="fi" id="m-total" type="number" min="1" placeholder="총 분량"></div></div>
-    <div class="fg"><label class="fl">일일 권장 목표량 (선택)</label><input class="fi" id="m-goal" type="number" min="0" placeholder="예: 30"></div>
-    <div class="mf"><button class="btn" onclick="closeModal()">취소</button><button class="btn btn-g" onclick="addBook()">저장하기</button></div>`);
+  showModal(`<div class="modal-title">${book ? '교재 수정' : '새 교재 등록'}</div>
+    <input type="hidden" id="m-book-id" value="${book ? esc(book.id) : ''}">
+    <div class="fg"><label class="fl">과목명</label><input class="fi" id="m-sub" placeholder="예: 거시경제학" list="sl" autocomplete="off" value="${book ? esc(book.subject) : ''}"><datalist id="sl">${subs.map(s=>`<option value="${esc(s)}">`).join('')}</datalist></div>
+    <div class="fg"><label class="fl">교재명</label><input class="fi" id="m-title" placeholder="교재 이름을 입력하세요" value="${book ? esc(book.title) : ''}"></div>
+    <div class="fr"><div class="fg"><label class="fl">단위</label><select class="fi" id="m-unit"><option value="p" ${book && book.unit === 'p' ? 'selected' : ''}>페이지</option><option value="문제" ${book && book.unit === '문제' ? 'selected' : ''}>문제</option><option value="강" ${book && book.unit === '강' ? 'selected' : ''}>강의</option></select></div>
+    <div class="fg"><label class="fl">전체 분량</label><input class="fi" id="m-total" type="number" min="1" placeholder="총 분량" value="${book ? book.total : ''}"></div></div>
+    <div class="fg"><label class="fl">일일 권장 목표량 (선택)</label><input class="fi" id="m-goal" type="number" min="0" placeholder="예: 30" value="${book ? (book.dailyGoal || '') : ''}"></div>
+    <div class="fg"><label class="fl">1회독 목표일 (선택)</label><input class="fi" id="m-target-date" type="date" value="${book && book.targetDate ? book.targetDate : ''}"></div>
+    <div class="mf"><button class="btn" onclick="closeModal()">취소</button><button class="btn btn-g" onclick="saveBook()">저장하기</button></div>`);
 }
  
-function addBook() {
-  const subject=document.getElementById('m-sub').value.trim(),title=document.getElementById('m-title').value.trim(),unit=document.getElementById('m-unit').value,total=parseInt(document.getElementById('m-total').value)||0,dailyGoal=parseInt(document.getElementById('m-goal').value)||0;
+function saveBook() {
+  const id=document.getElementById('m-book-id').value;
+  const subject=document.getElementById('m-sub').value.trim(),title=document.getElementById('m-title').value.trim(),unit=document.getElementById('m-unit').value,total=parseInt(document.getElementById('m-total').value)||0,dailyGoal=parseInt(document.getElementById('m-goal').value)||0,targetDate=document.getElementById('m-target-date').value||'';
   if(!subject||!title||total<1){alert('과목명, 교재명, 전체 분량을 확인해주세요.');return;}
-  S.books.push({id:Date.now().toString(),subject,title,unit,total,dailyGoal,current:0,phase:0,mastered:false});
+  if (id) {
+    const book = S.books.find(b => b.id === id);
+    if (!book) return;
+    Object.assign(book, { subject, title, unit, total, dailyGoal, targetDate });
+    book.current = Math.min(book.current, book.total);
+  } else {
+    S.books.push({id:Date.now().toString(),subject,title,unit,total,dailyGoal,targetDate,current:0,phase:0,mastered:false});
+  }
   save();closeModal();render();
 }
  
