@@ -119,6 +119,69 @@
     }
     .sh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
     .st { font-size: 18px; font-weight: 700; color: var(--text); }
+    .subcopy {
+      margin: -16px 0 28px;
+      color: var(--text2);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .insight-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+    }
+    .insight-card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 28px 24px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--sage-light);
+    }
+    .insight-label {
+      font-size: 13px;
+      color: var(--text2);
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .insight-book {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    .insight-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--sage-light);
+      font-size: 14px;
+    }
+    .insight-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .insight-key { color: var(--text2); }
+    .insight-value { color: var(--text); font-weight: 600; text-align: right; }
+    .insight-note {
+      color: var(--text2);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .empty-turtle {
+      font-size: 30px;
+      margin-bottom: 10px;
+    }
+    .empty-quote {
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 768px) {
+      .insight-grid { grid-template-columns: 1fr; gap: 16px; }
+      .insight-card { padding: 24px 20px; }
+      .subcopy { margin-bottom: 24px; }
+    }
  
     .btn {
       padding: 10px 24px; border-radius: 50px; border: none; cursor: pointer;
@@ -287,6 +350,14 @@
         <div class="sc"><div class="sl">전체 달성률</div><div class="sv" id="avg-pct">0%</div><div class="ss" id="book-count">교재 0권</div></div>
         <div class="sc"><div class="sl">누적 보상</div><div class="sv" id="total-stars">0</div><div class="ss">오늘 포함 전체 ⭐</div></div>
       </div>
+      <div class="subcopy">오늘 할 일보다, 지금 내가 어디쯤 왔는지를 보여주는 학습 대시보드</div>
+      <div class="sec">
+        <div class="sh"><span class="st">학습 인사이트</span></div>
+        <div class="insight-grid">
+          <div class="insight-card" id="current-position-card"></div>
+          <div class="insight-card" id="study-pattern-card"></div>
+        </div>
+      </div>
       <div class="sec">
         <div class="sh"><span class="st">오늘의 진도 트랙</span><button class="btn btn-g" onclick="openLogModal()">+ 오늘 기록</button></div>
         <div id="race-track"></div>
@@ -332,6 +403,68 @@ function load() {
 function save() { localStorage.setItem('turtlerun_gs', JSON.stringify(S)); }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function pct(b) { return b.total > 0 ? Math.min(100, Math.round(b.current / b.total * 100)) : 0; }
+function formatDate(value) {
+  return new Date(value).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+function getBookLogs(bookId) {
+  return S.logs
+    .filter(l => l.bookId === bookId)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+function getDailyLogTotals(logs) {
+  return logs.reduce((acc, log) => {
+    const key = log.date.slice(0, 10);
+    acc[key] = (acc[key] || 0) + log.amount;
+    return acc;
+  }, {});
+}
+function getEstimatedCompletion(book) {
+  const logs = getBookLogs(book.id);
+  const dailyTotals = getDailyLogTotals(logs);
+  const days = Object.keys(dailyTotals).sort();
+  if (days.length < 2) return null;
+  const avgPerStudyDay = Object.values(dailyTotals).reduce((sum, amount) => sum + amount, 0) / days.length;
+  if (avgPerStudyDay <= 0) return null;
+  const remaining = Math.max(0, book.total - book.current);
+  const estimatedDays = Math.ceil(remaining / avgPerStudyDay);
+  const date = new Date();
+  date.setDate(date.getDate() + estimatedDays);
+  return formatDate(date);
+}
+function getCurrentBook() {
+  if (!S.books.length) return null;
+  const latestLog = [...S.logs].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+  if (latestLog) return S.books.find(b => b.id === latestLog.bookId) || S.books[0];
+  return [...S.books].sort((a, b) => pct(b) - pct(a))[0];
+}
+function getRecentPattern() {
+  if (!S.logs.length) return null;
+  const today = new Date();
+  const cutoff = new Date();
+  cutoff.setDate(today.getDate() - 6);
+  const recentLogs = S.logs.filter(l => new Date(l.date) >= cutoff);
+  const firstLog = [...S.logs].sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+  const trackedDays = Math.floor((today - new Date(firstLog.date)) / 86400000) + 1;
+  if (trackedDays < 7 || !recentLogs.length) return null;
+  const recentDailyTotals = getDailyLogTotals(recentLogs);
+  const studyDays = Object.keys(recentDailyTotals).length;
+  const avgIncrease = recentLogs.reduce((sum, log) => {
+    const book = S.books.find(b => b.id === log.bookId);
+    if (!book || !book.total) return sum;
+    return sum + (log.amount / book.total * 100);
+  }, 0) / 7;
+  const totalsByBook = recentLogs.reduce((acc, log) => {
+    acc[log.bookId] = (acc[log.bookId] || 0) + log.amount;
+    return acc;
+  }, {});
+  const topBookId = Object.entries(totalsByBook).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const topBook = S.books.find(b => b.id === topBookId);
+  return {
+    studyDays,
+    avgIncrease: Math.round(avgIncrease * 10) / 10,
+    mostStudied: topBook ? topBook.title : '-'
+  };
+}
  
 function toggleSidebar() {
   if (window.innerWidth > 768) return;
@@ -379,6 +512,8 @@ function getDday() { if (!S.examDate) return null; return Math.ceil((new Date(S.
 function renderHome() {
   const dd = getDday();
   const dv = document.getElementById('dday-val'), dd2 = document.getElementById('dday-date');
+  const currentCard = document.getElementById('current-position-card');
+  const patternCard = document.getElementById('study-pattern-card');
   if (dd === null) { dv.textContent = '-'; dd2.textContent = '설정하기'; }
   else if (dd > 0) { dv.textContent = 'D-' + dd; dd2.textContent = S.examDate; }
   else if (dd === 0) { dv.textContent = 'D-Day'; dd2.textContent = '오늘이 시험일입니다'; }
@@ -389,9 +524,28 @@ function renderHome() {
   document.getElementById('total-stars').textContent = countAllStars();
   const track = document.getElementById('race-track');
   if (!S.books.length) {
-    track.innerHTML = '<div class="empty">등록된 교재가 없습니다.<br>새로운 학습을 시작해보세요.<br><br><button class="btn btn-g" onclick="openBookModal()" style="margin-top:16px">+ 첫 교재 등록</button></div>';
+    currentCard.innerHTML = '<div class="insight-label">현재 학습 위치</div><div class="insight-note">첫 교재를 등록하면 현재 학습 위치와 예상 완주 시점을 볼 수 있어요.</div>';
+    patternCard.innerHTML = '<div class="insight-label">최근 7일 학습 패턴</div><div class="insight-note">7일 이상 기록하면 학습 패턴을 분석해드릴게요.</div>';
+    track.innerHTML = '<div class="empty"><div class="empty-turtle">🐢</div><div class="empty-quote">Turtle says:</div>첫 교재를 등록하면 현재 학습 위치와 예상 완주 시점을 볼 수 있어요.<br><button class="btn btn-g" onclick="openBookModal()" style="margin-top:20px">+ 첫 교재 등록</button></div>';
     return;
   }
+  const currentBook = getCurrentBook();
+  const currentEstimate = currentBook ? getEstimatedCompletion(currentBook) : null;
+  currentCard.innerHTML = currentBook ? `
+    <div class="insight-label">현재 학습 위치</div>
+    <div class="insight-book">${esc(currentBook.title)}</div>
+    <div class="insight-row"><span class="insight-key">진행률</span><span class="insight-value">${pct(currentBook)}%</span></div>
+    ${currentEstimate
+      ? `<div class="insight-row"><span class="insight-key">예상 완주</span><span class="insight-value">${currentEstimate}</span></div>`
+      : '<div class="insight-note">기록이 쌓이면 예상 완주 시점을 보여드릴게요.</div>'}
+  ` : '<div class="insight-label">현재 학습 위치</div><div class="insight-note">기록이 쌓이면 예상 완주 시점을 보여드릴게요.</div>';
+  const pattern = getRecentPattern();
+  patternCard.innerHTML = pattern ? `
+    <div class="insight-label">최근 7일 학습 패턴</div>
+    <div class="insight-row"><span class="insight-key">학습한 날</span><span class="insight-value">${pattern.studyDays}일</span></div>
+    <div class="insight-row"><span class="insight-key">하루 평균 진도 증가</span><span class="insight-value">${pattern.avgIncrease}%p</span></div>
+    <div class="insight-row"><span class="insight-key">가장 많이 본 교재</span><span class="insight-value">${esc(pattern.mostStudied)}</span></div>
+  ` : '<div class="insight-label">최근 7일 학습 패턴</div><div class="insight-note">7일 이상 기록하면 학습 패턴을 분석해드릴게요.</div>';
   track.innerHTML = S.books.map(b => {
     const p = pct(b), lp = Math.max(2, Math.min(98, p));
     const days = getLast7Stars(b.id);
