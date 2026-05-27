@@ -198,6 +198,8 @@
       gap: 8px;
       margin-left: 12px;
     }
+    .feedback-turtle { font-size: 34px; text-align: center; margin-bottom: 10px; }
+    .feedback-copy { color: var(--text2); font-size: 15px; line-height: 1.7; text-align: center; }
 
     @media (max-width: 768px) {
       .insight-grid { grid-template-columns: 1fr; gap: 16px; }
@@ -416,10 +418,14 @@
 <div id="modal-area"></div>
  
 <script>
-let S = { books: [], logs: [], examDate: null };
+let S = { books: [], logs: [], examDate: null, firstUseDate: null, feedbackDone: false, feedbackSnoozeUntilStudyDays: 0 };
  
 function load() {
   try { const s = localStorage.getItem('turtlerun_gs'); if (s) S = JSON.parse(s); } catch(e) {}
+  if (!S.firstUseDate) {
+    S.firstUseDate = new Date().toISOString();
+    save();
+  }
   if (S.examDate) document.getElementById('exam-date-input').value = S.examDate;
 }
 function save() { localStorage.setItem('turtlerun_gs', JSON.stringify(S)); }
@@ -528,6 +534,40 @@ function countAllStars() {
   let t = 0;
   S.books.forEach(b => { Object.values(getStarsFor(b.id)).forEach(v => { if (v) t++; }); });
   return t;
+}
+function getDistinctStudyDayCount() {
+  return new Set(S.logs.map(l => l.date.slice(0, 10))).size;
+}
+function shouldShowFeedbackPrompt() {
+  if (S.feedbackDone) return false;
+  if (document.querySelector('#feedback-modal')) return false;
+  const distinctStudyDays = getDistinctStudyDayCount();
+  const firstUse = S.firstUseDate ? startOfDay(S.firstUseDate) : startOfDay(new Date());
+  const daysSinceFirstUse = diffDays(new Date(), firstUse);
+  const baseEligible = distinctStudyDays >= 3 || daysSinceFirstUse >= 7;
+  if (!baseEligible) return false;
+  if (distinctStudyDays < (S.feedbackSnoozeUntilStudyDays || 0)) return false;
+  return true;
+}
+function openFeedbackModal() {
+  showModal(`<div id="feedback-modal"><div class="feedback-turtle">🐢</div>
+    <div class="modal-title" style="margin-bottom:16px">Turtle says</div>
+    <div class="feedback-copy">지금까지 사용해보니 어떠셨나요?<br>30초만 피드백 부탁드려요 🙏</div>
+    <div class="mf" style="justify-content:center;margin-top:28px"><button class="btn btn-g" onclick="submitFeedback()">피드백 남기기</button><button class="btn" onclick="snoozeFeedback()">나중에 하기</button></div></div>`);
+}
+function maybeOpenFeedbackModal() {
+  if (shouldShowFeedbackPrompt()) setTimeout(openFeedbackModal, 0);
+}
+function submitFeedback() {
+  S.feedbackDone = true;
+  save();
+  closeModal();
+  window.open('https://forms.gle/xbD36npk9uJr77Ya9', '_blank', 'noopener');
+}
+function snoozeFeedback() {
+  S.feedbackSnoozeUntilStudyDays = getDistinctStudyDayCount() + 3;
+  save();
+  closeModal();
 }
  
 function nav(page) {
@@ -650,7 +690,7 @@ function renderSettings() {
   ).join('');
 }
  
-function render() { renderHome(); renderProgress(); renderKanban(); renderSettings(); }
+function render() { renderHome(); renderProgress(); renderKanban(); renderSettings(); maybeOpenFeedbackModal(); }
  
 function advancePhase(id) {
   const b = S.books.find(b => b.id === id); if (!b) return;
@@ -749,7 +789,7 @@ function showModal(html) {
   const area=document.getElementById('modal-area');
   const bd=document.createElement('div');bd.className='modal-backdrop';
   bd.innerHTML=`<div class="modal">${html}</div>`;
-  bd.addEventListener('click',e=>{if(e.target===bd)closeModal();});
+  bd.addEventListener('click',e=>{if(e.target===bd&&!bd.querySelector('#feedback-modal'))closeModal();});
   area.appendChild(bd);
 }
  
